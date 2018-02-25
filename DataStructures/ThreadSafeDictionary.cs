@@ -1,7 +1,5 @@
-
 using System.Collections.Generic;
 using System.Threading;
-using Svelto.Tasks.Profiler;
 
 namespace Svelto.DataStructures
 {
@@ -14,9 +12,9 @@ namespace Svelto.DataStructures
 
     public class ThreadSafeDictionary<TKey, TValue>
     {
-        public ThreadSafeDictionary(int v)
+        public ThreadSafeDictionary(int size)
         {
-            dict = new Dictionary<TKey, TValue>(v);
+            dict = new Dictionary<TKey, TValue>(size);
         }
 
         public ThreadSafeDictionary()

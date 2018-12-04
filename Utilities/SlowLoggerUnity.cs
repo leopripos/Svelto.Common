@@ -1,23 +1,30 @@
 #if UNITY_5_3_OR_NEWER || UNITY_5
-namespace Utility
+using System.Collections.Generic;
+
+namespace Svelto.Utilities
 {
-    public class SlowLoggerUnity : ILogger
+    public class SlowUnityLogger : ILogger
     {
-        public void Log(string txt, string stack = null, LogType type = LogType.Log)
+        public void Log(string txt, string stack = null, LogType type = LogType.Log, Dictionary<string, string> data = null)
         {
+            var dataString = string.Empty;
+            
+            if (data != null)
+                 dataString = DataToString.DetailString(data);
+            
             switch (type)
             {
                 case LogType.Log:
-                    UnityEngine.Debug.Log(stack != null ? txt.FastConcat(stack) : txt);
-                    break;
-                case LogType.Exception:
-                    UnityEngine.Debug.LogError("Log of exceptions not supported");
+                    UnityEngine.Debug.Log(txt);
                     break;
                 case LogType.Warning:
-                    UnityEngine.Debug.LogWarning(stack != null ? txt.FastConcat(stack) : txt);
+                    UnityEngine.Debug.LogWarning(txt);
                     break;
+                case LogType.Exception:
                 case LogType.Error:
-                    UnityEngine.Debug.LogError(stack != null ? txt.FastConcat(stack) : txt);
+                    UnityEngine.Debug.LogError(stack != null ? 
+                                                   "<color=cyan>".FastConcat(txt.FastConcat("</color>", stack)) : 
+                                                   "<color=cyan>".FastConcat(txt, "< /color >").FastConcat(dataString));
                     break;
             }
         }

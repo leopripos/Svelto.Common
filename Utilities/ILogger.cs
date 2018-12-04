@@ -1,4 +1,4 @@
-namespace Utility
+namespace Svelto.Utilities
 {
     public enum LogType
     {
@@ -9,6 +9,6 @@ namespace Utility
     }
     public interface ILogger
     {
-        void Log (string txt, string stack = null, LogType type = LogType.Log);
+        void Log (string txt, string stack = null, LogType type = LogType.Log, System.Collections.Generic.Dictionary<string, string> data = null);
     }
 }

@@ -1,46 +1,74 @@
 using System;
+using System.Collections.Generic;
 #if NETFX_CORE
 using Windows.System.Diagnostics;
 #else
 using System.Diagnostics;
 #endif
 using System.Text;
+using Svelto.DataStructures;
 
-namespace Utility
+namespace Svelto.Utilities
 {
     public static class Console
     {
-        static StringBuilder _stringBuilder = new StringBuilder(256);
+        static readonly StringBuilder _stringBuilder = new StringBuilder(256);
+        static readonly FasterList<Svelto.DataStructures.WeakReference<ILogger>> _loggers;
 
-        public static ILogger logger;
-
-        public static volatile bool BatchLog = false;
-
-        //Hack, have to find the right solution
-        public static Action<Exception, string, string> onException;
-
+        static readonly ILogger _standardLogger;
+        
         static Console()
         {
+            _loggers = new FasterList<Svelto.DataStructures.WeakReference<ILogger>>();
+
 #if UNITY_5_3_OR_NEWER || UNITY_5
-            logger = new SlowLoggerUnity();
-            onException = (e, message, stack) =>
-                {
-                    UnityEngine.Debug.LogException(e, null);
-                };
+            _standardLogger = new SlowUnityLogger();
 #else
-            logger = new SimpleLogger();
+            _standardLogger = new SimpleLogger();
 #endif
+            _loggers.Add(new Svelto.DataStructures.WeakReference<ILogger>(_standardLogger));
         }
 
+        public static void SetLogger(ILogger log)
+        {
+            _loggers[0] = new Svelto.DataStructures.WeakReference<ILogger>(log);
+        }
+        
+        public static void AddLogger(ILogger log)
+        {
+            _loggers.Add(new Svelto.DataStructures.WeakReference<ILogger>(log));
+        } 
+ 
+        static void Log(string txt, string stack, LogType type, Dictionary<string, string> extraData = null)
+        {
+            for (int i = 0; i < _loggers.Count; i++)
+            {
+                if (_loggers[i].IsValid == true)
+                    _loggers[i].Target.Log(txt, stack, type, extraData);
+                else
+                {
+                    _loggers.UnorderedRemoveAt(i);
+                    i--;
+                }
+            }
+        }
+        
         public static void Log(string txt)
         {
-            logger.Log(txt);
+            Log(txt, null, LogType.Log);
         }
 
-        public static void LogError(string txt)
+        public static void LogError(string txt, Dictionary<string, string> extraData = null)
         {
-            string toPrint;
+            LogError(txt, null, extraData);
+        }
 
+        public static void LogError(string txt, string stack, Dictionary<string, string> extraData = null)
+        {
+            if (stack == null) stack = Environment.StackTrace;
+            
+            string toPrint;
+            
             lock (_stringBuilder)
             {
                 _stringBuilder.Length = 0;
@@ -48,54 +76,60 @@ namespace Utility
                 _stringBuilder.Append(txt);
 
                 toPrint = _stringBuilder.ToString();
-            }
-
-            logger.Log(toPrint, null, LogType.Error);
+            }    
+             
+            Log(toPrint, stack, LogType.Error, extraData);
+            
         }
 
-        public static void LogError(string txt, string stack)
+        public static void LogException(Exception e, Dictionary<string, string> extraData = null)
         {
-            string toPrint;
-
-            lock (_stringBuilder)
-            {
-                _stringBuilder.Length = 0;
-                _stringBuilder.Append("-!!!!!!-> ");
-                _stringBuilder.Append(txt);
-
-                toPrint = _stringBuilder.ToString();
-            }
-
-            logger.Log(toPrint, stack, LogType.Error);
+            LogException(String.Empty, e, extraData);
         }
-
-        public static void LogException(Exception e)
+        
+        public static void LogException(string message, Exception e, Dictionary<string, string> extraData = null)
         {
+            if (extraData == null)
+                extraData = new Dictionary<string, string>();
+            
             string toPrint;
             string stackTrace;
 
             lock (_stringBuilder)
             {
-                _stringBuilder.Length = 0;
-                _stringBuilder.Append("-!!!!!!-> ").Append(e.Message);
-
-                stackTrace = e.StackTrace;
-
-                if (e.InnerException != null)
                 {
-                    e = e.InnerException;
+                    int count = 0;
+                    while (e.InnerException != null)
+                    {
+                        _stringBuilder.Length = 0;
 
-                    _stringBuilder.Append(" Inner Message: ").Append(e.Message).Append(" Inner Stacktrace:")
-                        .Append(e.StackTrace);
+                        extraData["OuterException".FastConcat(count)] = _stringBuilder.Append(e.GetType())
+                                                                    .Append("-<color=cyan>")
+                                                                    .Append(e.Message).Append("</color>").ToString();
 
-                    stackTrace = e.StackTrace;
+                        _stringBuilder.Length = 0;
+
+                        extraData["OuterStackTrace".FastConcat(count)] = _stringBuilder.Append("-<color=cyan>").Append(e.StackTrace)
+                                                                     .Append("</color>").ToString();
+
+                        e = e.InnerException;
+
+                        count++;
+                    }
                 }
 
-                toPrint = _stringBuilder.ToString();
+                {
+                    _stringBuilder.Length = 0;
+                    
+                    toPrint = _stringBuilder.Append("-******-> ").Append(message).Append("-Exception-").Append(e.GetType())
+                                  .Append("-<color=cyan>").Append(e.Message)
+                                  .Append("</color>").ToString();
+                    
+                    stackTrace = e.StackTrace;
+                }
             }
-
-            if (onException != null)
-                onException(e, toPrint, stackTrace);
+            
+            Log(toPrint, stackTrace, LogType.Exception, extraData);
         }
 
         public static void LogWarning(string txt)
@@ -111,7 +145,7 @@ namespace Utility
                 toPrint = _stringBuilder.ToString();
             }
 
-            logger.Log(toPrint, null, LogType.Warning);
+            Log(toPrint, null, LogType.Warning);
         }
 
         /// <summary>
@@ -126,10 +160,11 @@ namespace Utility
             {
 #if NETFX_CORE
                 string currentTimeString = DateTime.UtcNow.ToString("dd/mm/yy hh:ii:ss");
-                string processTimeString = (DateTime.UtcNow - ProcessDiagnosticInfo.GetForCurrentProcess().ProcessStartTime.DateTime).ToString();
+                string processTimeString = (DateTime.UtcNow - ProcessDiagnosticInfo.
+                                                GetForCurrentProcess().ProcessStartTime.DateTime.ToUniversalTime()).ToString();
 #else
                 string currentTimeString = DateTime.UtcNow.ToLongTimeString(); //ensure includes seconds
-                string processTimeString = (DateTime.Now - Process.GetCurrentProcess().StartTime).ToString();
+                string processTimeString = (DateTime.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime()).ToString();
 #endif
 
                 _stringBuilder.Length = 0;

@@ -1,5 +1,3 @@
-
-using System;
 #if NETFX_CORE
 using System.Threading.Tasks;
 #endif
@@ -11,19 +9,17 @@ namespace Svelto.Utilities
     {
         public static void MemoryBarrier()
         {
-#if NETFX_CORE || NET_4_6
+#if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
             Interlocked.MemoryBarrier();
 #else
             Thread.MemoryBarrier();
 #endif
         }
-#if NETFX_CORE && !NET_STANDARD_2_0 && !NETSTANDARD2_0
-        static TimeSpan wait = TimeSpan.FromMilliseconds(0.1);
-#endif
+
         public static void Yield()
         {
 #if NETFX_CORE && !NET_STANDARD_2_0 && !NETSTANDARD2_0
-            Task.Delay(wait).Wait();
+            throw new Exception("Svelto doesn't support UWP without NET_STANDARD_2_0 support");
 #elif NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
             Thread.Yield(); 
 #else
@@ -34,45 +30,117 @@ namespace Svelto.Utilities
         public static void TakeItEasy()
         {
 #if NETFX_CORE && !NET_STANDARD_2_0 && !NETSTANDARD2_0
-            Task.Delay(1).Wait();
-#elif NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
+            throw new Exception("Svelto doesn't support UWP without NET_STANDARD_2_0 support");
+#else
             Thread.Sleep(1); 
+#endif
+        }
+
+        /// <summary>
+        /// Yield the thread every so often
+        /// </summary>
+        /// <param name="quickIterations">will be increment by 1</param>
+        /// <param name="frequency">must be multipel of 2</param>
+        public static bool Wait(ref int quickIterations, int frequency = 256)
+        {
+            if ((quickIterations++ & (frequency - 1)) == 0)
+            {
+                Yield();
+
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool VolatileRead(ref bool val)
+        {
+#if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
+            return Volatile.Read(ref val);
+#else
+            Thread.MemoryBarrier();
+
+            return val;
+#endif
+        }
+        
+        public static byte VolatileRead(ref byte val)
+        {
+#if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
+            return Volatile.Read(ref val);
+#else
+            Thread.MemoryBarrier();
+
+            return val;
+#endif
+        }
+        
+        public static int VolatileRead(ref int val)
+        {
+#if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
+            return Volatile.Read(ref val);
+#else
+            Thread.MemoryBarrier();
+
+            return val;
+#endif
+        }
+
+        public static void VolatileWrite(ref bool var, bool val)
+        {
+#if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
+            Volatile.Write(ref var, val);
+#else
+            var = val;
+            Thread.MemoryBarrier();
+#endif
+        }
+        
+        public static void VolatileWrite(ref byte var, byte val)
+        {
+#if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
+            Volatile.Write(ref var, val);
+#else
+            var = val;
+            Thread.MemoryBarrier();
 #endif
         }
     }
 
-#if NETFX_CORE || NET_4_6
-    public sealed class ManualResetEventEx : ManualResetEventSlim
+#if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
+    public sealed class ManualResetEventEx
     {
-        public new void Wait()
+        readonly ManualResetEventSlim _manualReset = new ManualResetEventSlim(false);
+        
+        public void Wait()
         {
-            base.Wait();
+            _manualReset.Wait();
         }
 
-        public new void Wait(int ms)
+        public void Wait(int ms)
         {
-            base.Wait(ms);
+            _manualReset.Wait(ms);
         }
 
-        public new void Reset()
+        public void Reset()
         {
-            base.Reset();
+            _manualReset.Reset();
         }
 
-        public new void Set()
+        public void Set()
         {
-            base.Set();
+            _manualReset.Set();
         }
 
-        public new void Dispose()
+        public void Dispose()
         {
-            base.Dispose();
+            _manualReset.Dispose();
         }
     }
 #else
     public class ManualResetEventEx
     {
-        ManualResetEvent _manualReset = new ManualResetEvent(false);
+        readonly ManualResetEvent _manualReset = new ManualResetEvent(false);
         
         public void Wait()
         {

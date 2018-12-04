@@ -17,7 +17,7 @@ namespace Svelto.WeakEvents
 
         public static WeakEvent operator-(WeakEvent c1, Action x)
         {
-            DBC.Check.Require(x != null);
+            DBC.Common.Check.Require(x != null);
             c1.Remove(x);
 
             return c1;
@@ -56,7 +56,7 @@ namespace Svelto.WeakEvents
             for (int i = 0; i < _toRemove.Count; i++)
                 RemoveInternal(_toRemove[i].Key, _toRemove[i].Value);
             
-            _toRemove.FastClear();
+            _toRemove.Clear();
         }
 
         protected void RemoveInternal(object thisObject, MethodInfo thisMethod)
@@ -85,6 +85,11 @@ namespace Svelto.WeakEvents
         {
             _invoke = InvokeDelegate;
         }
+        
+        public void Clear()
+        {
+            _subscribers.Clear();
+        }
 
         protected readonly FasterList<WeakActionBase> 
             _subscribers = new FasterList<WeakActionBase>();
@@ -109,7 +114,7 @@ namespace Svelto.WeakEvents
 
         public static WeakEvent<T1> operator-(WeakEvent<T1> c1, Action<T1> x)
         {
-            DBC.Check.Require(x != null);
+            DBC.Common.Check.Require(x != null);
             c1.Remove(x);
 
             return c1;
@@ -153,7 +158,7 @@ namespace Svelto.WeakEvents
 
         public static WeakEvent<T1, T2> operator-(WeakEvent<T1, T2> c1, Action<T1, T2> x)
         {
-            DBC.Check.Require(x != null);
+            DBC.Common.Check.Require(x != null);
             c1.Remove(x);
 
             return c1;

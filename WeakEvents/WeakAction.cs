@@ -56,10 +56,7 @@ namespace Svelto.WeakEvents
         readonly DataStructures.WeakReference<object> objectRef;
         readonly MethodInfo method;
 
-        public bool IsValid
-        {
-            get { return objectRef.IsValid; }
-        }
+        public bool IsValid => objectRef.IsValid;
 
         protected WeakActionBase(Action listener)
             : this(listener.Target, listener.GetMethodInfoEx())
@@ -86,24 +83,15 @@ namespace Svelto.WeakEvents
 
         protected bool Invoke_Internal(object[] data)
         {
+            //please do not add the try catch here, it's very annoying to not be able to check the real stack
             if (objectRef.IsValid)
             {
-                try
-                {
-                    method.Invoke(objectRef.Target, data);
-                }
-                catch (Exception e)
-                {
-                    if (e.InnerException != null)
-                        throw e.InnerException;
-
-                    throw;
-                }
+                method.Invoke(objectRef.Target, data);
 
                 return true;
             }
             
-            Svelto.Utilities.Console.Log("<color=orange>Svelto.Common.WeakAction</color> Target of weak action has been garbage collected");
+            Console.LogError("<color=orange>Svelto.Common.WeakAction</color> Target of weak action has been garbage collected");
 
             return false;
         }

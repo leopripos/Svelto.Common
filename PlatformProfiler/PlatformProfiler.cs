@@ -1,123 +1,164 @@
 using System;
+using Svelto.Common.Internal;
 
 namespace Svelto.Common
 {
-#if UNITY_5_3_OR_NEWER && ENABLE_PLATFORM_PROFILER    
-    public struct PlatformProfilerMT : IDisposable
+    public interface IPlatformProfiler: IDisposable
     {
-        readonly UnityEngine.Profiling.CustomSampler sampler;
+        DisposableStruct Sample(string samplerName, string samplerInfo = null);
+        DisposableStruct Sample<T>(T sampled, string samplerInfo = null);
+    }
+    
+    public struct DisposableStruct : IDisposable
+    {
+        readonly Action _endAction;
+        readonly Action<object> _beginAction;
+        readonly object         _beginInfo;
 
-        public PlatformProfilerMT(string name):this()
+        public DisposableStruct(Action<object> beginAction, object beginInfo, Action endEndAction)
         {
-            UnityEngine.Profiling.Profiler.BeginThreadProfiling("Svelto.Tasks", name);
+            _endAction = endEndAction;
+            _beginAction = beginAction;
+            _beginInfo = beginInfo;
+
+            _beginAction?.Invoke(_beginInfo);
         }
 
         public void Dispose()
         {
+            _endAction?.Invoke();
+        }
+
+        public InverseDisposableStruct Yield()
+        {
+            _endAction?.Invoke();
+
+            return new InverseDisposableStruct(_beginAction, _beginInfo);
+        }
+    }
+    
+    public struct InverseDisposableStruct : IDisposable
+    {
+        readonly object _beginInfo;
+        readonly Action<object> _beginAction;
+
+        public InverseDisposableStruct(Action<object> beginAction, object beginInfo)
+        {
+            _beginInfo = beginInfo;
+            _beginAction = beginAction;
+        }
+
+        public void Dispose()
+        {
+            _beginAction?.Invoke(_beginInfo);
+        }
+    }
+#if UNITY_2017_3_OR_NEWER && ENABLE_PLATFORM_PROFILER    
+    public struct PlatformProfilerMT : IPlatformProfiler
+    {
+        static readonly Action END_SAMPLE_ACTION =() => UnityEngine.Profiling.Profiler.EndSample(); 
+        static readonly Action<object> BEGIN_SAMPLE_ACTION =
+            info => UnityEngine.Profiling.Profiler.BeginSample(info as string); 
+
+        public PlatformProfilerMT(string info)
+        {
+            UnityEngine.Profiling.Profiler.BeginThreadProfiling("Svelto.Tasks", info);
+
+            BEGIN_SAMPLE_ACTION(info);
+        }
+        
+        public DisposableStruct Sample(string samplerName, string samplerInfo = null)
+        {
+#if !PROFILER        
+            var name = samplerName.FastConcat("-", samplerInfo);
+#else
+            var name = samplerName;
+#endif            
+            return new DisposableStruct(BEGIN_SAMPLE_ACTION, name, END_SAMPLE_ACTION);
+        }
+
+        public DisposableStruct Sample<T>(T samplerName, string samplerInfo = null)
+        {
+            return Sample(samplerName.TypeName(), samplerInfo);
+        }
+
+        public void Dispose()
+        {
+            END_SAMPLE_ACTION();
+            
             UnityEngine.Profiling.Profiler.EndThreadProfiling();
         }
-
-        public DisposableStruct Sample(string samplerName)
-        {
-            return new DisposableStruct(UnityEngine.Profiling.CustomSampler.Create(samplerName));
-        }
-
-        public struct DisposableStruct : IDisposable
-        {
-            readonly UnityEngine.Profiling.CustomSampler _sampler;
-
-            public DisposableStruct(UnityEngine.Profiling.CustomSampler customSampler)
-            {
-                _sampler = customSampler;
-                _sampler.Begin();
-            }
-
-            public void Dispose()
-            {
-                _sampler.End();
-            }
-        }
     }
-    
-    public struct PlatformProfiler : IDisposable
+
+    public struct PlatformProfiler: IPlatformProfiler
     {
-        public PlatformProfiler(string name) : this()
-        {
-            UnityEngine.Profiling.Profiler.BeginSample(name);
-        }
+        static readonly Action END_SAMPLE_ACTION  = () => UnityEngine.Profiling.Profiler.EndSample(); 
+        static readonly Action<object> BEGIN_SAMPLE_ACTION =
+            (info) => UnityEngine.Profiling.Profiler.BeginSample(info as string);
 
-        public void Dispose()
+        public PlatformProfiler(string info)
         {
-            UnityEngine.Profiling.Profiler.EndSample();
+            BEGIN_SAMPLE_ACTION(info);
         }
-
-        public DisposableStruct Sample(string samplerName)
+        
+        public DisposableStruct Sample(string samplerName, string samplerInfo = null)
         {
-            return new DisposableStruct(samplerName);
-        }
-
-        public struct DisposableStruct : IDisposable
-        {
-            public DisposableStruct(string samplerName)
-            {
-                UnityEngine.Profiling.Profiler.BeginSample(samplerName);
-            }
-
-            public void Dispose()
-            {
-                UnityEngine.Profiling.Profiler.EndSample();
-            }
-        }
-    }
+#if !PROFILER                    
+            var name = samplerName.FastConcat("-", samplerInfo);
 #else
-    public struct PlatformProfiler : IDisposable
-    {
-        public PlatformProfiler(string name)
-        {}
+            var name = samplerName;
+#endif            
+            
+            return new DisposableStruct(BEGIN_SAMPLE_ACTION, name, END_SAMPLE_ACTION);
+        }
+
+        public DisposableStruct Sample<T>(T sampled, string samplerInfo = null)
+        {
+            return Sample(sampled.TypeName(), samplerInfo);
+        }
 
         public void Dispose()
-        {}
-
-        public T Sample<T>(string samplerName) where T : new()
         {
-            return new T();
+            END_SAMPLE_ACTION();
         }
+    }
+#else    
+    public struct PlatformProfilerMT : IPlatformProfiler
+    {
+        public PlatformProfilerMT(string info)
+        {}
         
-        public DisposableStruct Sample(string samplerName)
+        public DisposableStruct Sample(string samplerName, string samplerInfo = null)
         {
             return new DisposableStruct();
         }
 
-        public struct DisposableStruct : IDisposable
-        {
-            public void Dispose()
-            {}
-        }
-    }
-    
-    public struct PlatformProfilerMT : IDisposable
-    {
-        public PlatformProfilerMT(string name)
-        {}
-
-        public void Dispose()
-        {}
-
-        public T Sample<T>(string samplerName) where T : new()
-        {
-            return new T();
-        }
-        
-        public DisposableStruct Sample(string samplerName)
+        public DisposableStruct Sample<T>(T sampled, string samplerInfo = null)
         {
             return new DisposableStruct();
         }
 
-        public struct DisposableStruct : IDisposable
-        {
-            public void Dispose()
-            {}
-        }
+        public void Dispose()
+        {}
     }
-#endif    
+
+    public struct PlatformProfiler: IPlatformProfiler
+    {
+        public PlatformProfiler(string info)
+        {}
+
+        public DisposableStruct Sample(string samplerName, string samplerInfo = null)
+        {
+            return new DisposableStruct();
+        }
+        
+        public DisposableStruct Sample<T>(T samplerName, string samplerInfo = null)
+        {
+            return new DisposableStruct();
+        }
+
+        public void Dispose()
+        {}
+    }
+#endif
 }

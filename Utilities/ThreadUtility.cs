@@ -40,20 +40,26 @@ namespace Svelto.Utilities
         /// Yield the thread every so often
         /// </summary>
         /// <param name="quickIterations">will be increment by 1</param>
-        /// <param name="frequency">must be multipel of 2</param>
-        public static bool Wait(ref int quickIterations, int frequency = 256)
+        /// <param name="frequency">must be power of 2</param>
+        public static void Wait(ref int quickIterations, int frequency = 256)
         {
             if ((quickIterations++ & (frequency - 1)) == 0)
-            {
                 Yield();
-
-                return true;
-            }
-
-            return false;
         }
+        
 
         public static bool VolatileRead(ref bool val)
+        {
+#if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
+            return Volatile.Read(ref val);
+#else
+            Thread.MemoryBarrier();
+
+            return val;
+#endif
+        }
+        
+        public static long VolatileRead(ref long val)
         {
 #if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
             return Volatile.Read(ref val);
@@ -85,6 +91,17 @@ namespace Svelto.Utilities
             return val;
 #endif
         }
+        
+        public static float VolatileRead(ref float val)
+        {
+#if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
+            return Volatile.Read(ref val);
+#else
+            Thread.MemoryBarrier();
+
+            return val;
+#endif
+        }
 
         public static void VolatileWrite(ref bool var, bool val)
         {
@@ -96,7 +113,27 @@ namespace Svelto.Utilities
 #endif
         }
         
+        public static void VolatileWrite(ref long var, long val)
+        {
+#if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
+            Volatile.Write(ref var, val);
+#else
+            var = val;
+            Thread.MemoryBarrier();
+#endif
+        }
+        
         public static void VolatileWrite(ref byte var, byte val)
+        {
+#if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
+            Volatile.Write(ref var, val);
+#else
+            var = val;
+            Thread.MemoryBarrier();
+#endif
+        }
+
+        public static void VolatileWrite(ref float var, float val)
         {
 #if NET_4_6 || NET_STANDARD_2_0 || NETSTANDARD2_0
             Volatile.Write(ref var, val);
